@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "windows": ["Microsoft.VisualStudioCode", "7zip.7zip"],
+  "wsl": ["git", "shellcheck", "httpie"]
+}

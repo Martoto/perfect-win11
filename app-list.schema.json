@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Perfect Win11 package list v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "windows", "wsl"],
+  "properties": {
+    "schemaVersion": { "const": 1, "type": "integer" },
+    "windows": {
+      "type": "array", "maxItems": 200,
+      "items": { "type": "string", "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*(\\.[A-Za-z0-9][A-Za-z0-9_-]*)+$", "not": { "pattern": "[\\r\\n]" } }
+    },
+    "wsl": {
+      "type": "array", "maxItems": 200,
+      "items": { "type": "string", "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9+.-]+$", "not": { "pattern": "[\\r\\n]" } }
+    }
+  }
+}

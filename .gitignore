@@ -1,0 +1,4 @@
+*.log
+TestResults.xml
+__pycache__/
+.test-output/
