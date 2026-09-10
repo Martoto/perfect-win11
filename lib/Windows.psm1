@@ -222,10 +222,40 @@ function Set-PowerToys($State,$Path) {
     throw 'Command Palette did not expose its show event. Open PowerToys, enable Command Palette, and resume.'
 }
 
+function Test-AutoHotkeyScript([string]$Executable,[string]$ScriptPath) {
+    $info=New-Object Diagnostics.ProcessStartInfo
+    $info.FileName=$Executable
+    # /iLib loads then exits without running auto-execute code or activating hotkeys.
+    # It is compatible with earlier v2 releases as well as current /Validate builds.
+    $info.Arguments='/ErrorStdOut /iLib NUL "' + $ScriptPath + '"'
+    $info.UseShellExecute=$false
+    $info.CreateNoWindow=$true
+    $info.RedirectStandardError=$true
+    $info.RedirectStandardOutput=$true
+    $process=[Diagnostics.Process]::Start($info)
+    try {
+        $stdout=$process.StandardOutput.ReadToEndAsync()
+        $stderr=$process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(10000)) { $process.Kill(); throw 'AutoHotkey validation timed out.' }
+        if ($process.ExitCode -ne 0) { throw "AutoHotkey validation failed (exit $($process.ExitCode)): $($stderr.Result) $($stdout.Result)" }
+    } finally { $process.Dispose() }
+}
+
+function Test-WinTapInstalled($Path) {
+    $target=Join-Path (Split-Path $Path) 'WinTap.ahk'
+    if (-not (Test-Path -LiteralPath $target)) { return $false }
+    $startup=Get-ItemPropertyValue -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'PerfectWin11.WinTap' -ErrorAction SilentlyContinue
+    if (-not $startup -or -not $startup.EndsWith('"'+$target+'"')) { return $false }
+    $sourceHash=(Get-FileHash -LiteralPath "$PSScriptRoot\..\assets\WinTap.ahk" -Algorithm SHA256).Hash
+    $targetHash=(Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+    return $sourceHash -eq $targetHash
+}
+
 function Install-WinTap($State,$Path) {
     $ahk=$null
     foreach ($candidate in @("$env:ProgramFiles\AutoHotkey\v2\AutoHotkey64.exe","$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe")) { if (Test-Path $candidate) { $ahk=$candidate; break } }
     if (-not $ahk) { throw 'AutoHotkey v2 executable not found.' }
+    Test-AutoHotkeyScript $ahk "$PSScriptRoot\..\assets\WinTap.ahk"
     $target=Join-Path (Split-Path $Path) 'WinTap.ahk'
     Save-FileBackup $State $Path $target
     Copy-Item -LiteralPath "$PSScriptRoot\..\assets\WinTap.ahk" -Destination $target -Force

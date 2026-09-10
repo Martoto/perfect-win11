@@ -93,7 +93,7 @@ try {
         }
         [void](Invoke-Step $state $statePath 'taskbar' { Set-Taskbar $state $statePath })
         $ptOk=Invoke-Step $state $statePath 'powertoys-settings' { Set-PowerToys $state $statePath }
-        if ($ptOk) { [void](Invoke-Step $state $statePath 'win-tap' { Install-WinTap $state $statePath }) }
+        if ($ptOk) { [void](Invoke-Step $state $statePath 'win-tap' { Install-WinTap $state $statePath } { Test-WinTapInstalled $statePath }) }
         $featuresOk=Invoke-Step $state $statePath 'wsl-features' {
             $code=Invoke-Machine Features
             if ($code -eq 3010) { $state.rebootBoot=$boot; Write-Json $statePath $state }

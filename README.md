@@ -80,9 +80,12 @@ Settings restoration **does not reinstall removed apps, restore their provisioni
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-WinTap.ps1
 ```
 
-The suite runs with the inbox Pester 3.4 on Windows PowerShell 5.1 and mocks system operations. It does not execute setup against the host. See [VALIDATION.md](VALIDATION.md) for the remaining acceptance procedure.
+The suite runs with the inbox Pester 3.4 on Windows PowerShell 5.1 and mocks system operations. The separate AutoHotkey test requires the v2 interpreter (or `-AutoHotkeyPath`) and validates script loading without activating hotkeys. Setup also performs this check before copying/registering the helper. Resume refreshes the helper when its source hash changes. Neither test executes setup against the host. See [VALIDATION.md](VALIDATION.md) for the remaining acceptance procedure.
+
+If an older helper reports an error at `#MenuMaskKey`, update the repository and relaunch `assets\WinTap.ahk` with AutoHotkey v2. The directive was replaced by `A_MenuMaskKey := "vkE8"`. For an installed setup, `Setup.ps1 -Resume` updates the saved helper as well.
 
 Implementation references: [Microsoft WinGet bootstrap](https://learn.microsoft.com/en-us/windows/package-manager/winget/), [WSL installation](https://learn.microsoft.com/en-us/windows/wsl/install), [WSL systemd](https://learn.microsoft.com/en-us/windows/wsl/systemd), [mise core tools](https://mise.jdx.dev/core-tools.html), [mise installation](https://mise.jdx.dev/installing-mise.html), [Docker Ubuntu installation](https://docs.docker.com/engine/install/ubuntu/), [PowerToys enabled-module keys](https://github.com/microsoft/PowerToys/blob/main/src/settings-ui/Settings.UI.Library/EnabledModules.cs), and [Command Palette show-event handler](https://github.com/microsoft/PowerToys/blob/main/src/modules/cmdpal/Microsoft.CmdPal.UI/MainWindow.xaml.cs).
 

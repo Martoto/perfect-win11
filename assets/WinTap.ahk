@@ -1,11 +1,12 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 #UseHook
-#MenuMaskKey vkE8
+A_MenuMaskKey := "vkE8"
 ; Pass physical Win-down through immediately. Only standalone short taps mask
 ; the menu before forwarding Win-up; no native Win combination is reimplemented.
 global Presses := Map()
-global Watcher := InputHook("V")
+; Observe key events without collecting text or stopping after 1023 characters.
+global Watcher := InputHook("V L0")
 Watcher.KeyOpt("{All}", "N")
 Watcher.OnKeyDown := OtherKey
 Watcher.Start()

@@ -8,6 +8,14 @@
 - No system setup, app removal, elevation, registry changes, runtime installation or Docker execution was performed on the development host.
 - WSL enumeration is unavailable in this execution environment (`Wsl/EnumerateDistros/Service/E_ACCESSDENIED`). A disposable Windows 11 VM was not available. Python/AutoHotkey runtime verification and the matrix below remain **NOT RUN**. Do not treat unit-test success as end-to-end certification.
 
+## AutoHotkey startup fix verification
+
+- Reproduced the original line-4 startup error with the installed AutoHotkey **2.0.27** interpreter: `#MenuMaskKey vkE8` is not a recognized v2 action; exit code 2.
+- Replaced it with the v2 `A_MenuMaskKey` assignment. Interpreter load-only validation of the corrected helper passes with exit code 0. This check runs without activating hotkeys.
+- Disabled InputHook's text collection/1023-character limit with `L0`, keeping shortcut tracking active during long sessions.
+- Added helper-content/startup-registration checks on resume and interpreter validation before installation. Physical keyboard and login acceptance checks below still need manual execution.
+- Expanded Pester suite: **30 passed, 0 failed**, including stale-helper replacement and missing startup registration.
+
 ## Disposable VM matrix (all NOT RUN)
 
 Use a fresh Windows 11 Home x64 VM and repeat on Pro x64. Enable nested virtualization. Take an OOBE-completed, signed-in snapshot; transfer this project to the normal user's local disk. Record OS/WSL/WinGet/PowerToys versions and preserve transcripts, state, screenshots and outputs for each case.

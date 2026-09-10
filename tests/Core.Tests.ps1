@@ -205,3 +205,33 @@ Describe 'Preserve configuration' {
         (Get-Content $state.backups[0].copy) | Should Be 'original'
     }
 }
+
+Describe 'Win-tap helper updates on resume' {
+    InModuleScope Windows {
+        It 'requires installation when the helper is missing' {
+            Test-WinTapInstalled (Join-Path $TestDrive 'state.json') | Should Be $false
+        }
+        It 'requires reinstalling a stale helper even after the step completed' {
+            $path=Join-Path $TestDrive 'state.json'
+            $target=Join-Path $TestDrive 'WinTap.ahk'
+            Set-Content $target '#MenuMaskKey vkE8'
+            Mock Get-ItemPropertyValue { '"AutoHotkey64.exe" "'+(Join-Path $TestDrive 'WinTap.ahk')+'"' }
+            $state=New-SetupState @{schemaVersion=1; windows=@(); wsl=@()} @() @() 'test-user'
+            $state.steps['win-tap']=@{status='done'; error=$null}
+            Invoke-Step $state $path 'win-tap' { throw 'update attempted' } { Test-WinTapInstalled $path } | Should Be $false
+            $state.steps['win-tap'].error | Should Be 'update attempted'
+        }
+        It 'skips an identical helper with its startup registration intact' {
+            $path=Join-Path $TestDrive 'state.json'
+            Copy-Item (Join-Path $PSScriptRoot '..\assets\WinTap.ahk') (Join-Path $TestDrive 'WinTap.ahk') -Force
+            Mock Get-ItemPropertyValue { '"AutoHotkey64.exe" "'+(Join-Path $TestDrive 'WinTap.ahk')+'"' }
+            Test-WinTapInstalled $path | Should Be $true
+        }
+        It 'repairs a missing startup registration even if file content matches' {
+            $path=Join-Path $TestDrive 'state.json'
+            Copy-Item (Join-Path $PSScriptRoot '..\assets\WinTap.ahk') (Join-Path $TestDrive 'WinTap.ahk') -Force
+            Mock Get-ItemPropertyValue { $null }
+            Test-WinTapInstalled $path | Should Be $false
+        }
+    }
+}
