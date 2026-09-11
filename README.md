@@ -1,8 +1,8 @@
 # Perfect Win11
 
-A resumable, interactive developer setup for a personal Windows 11 x64 Home/Pro desktop after OOBE. Requires administrator credentials, internet access, firmware virtualization (nested virtualization in a VM), and **64-bit Windows PowerShell 5.1**. Start it as the intended desktop user in a **non-elevated** window. UAC is requested for individual machine operations; the coordinator never changes user identity.
+I Actually believe Win11 can be as good of a developer desktop experience as linux or Mac. So I built this opinionated configuration tool to get OOBE windows into a respectable shape. 
 
-Implementation and mocked tests are included. **This release has not yet passed the disposable Windows 11 VM acceptance matrix.** Review [VALIDATION.md](VALIDATION.md) before using it on a primary machine.
+Larpers beware!
 
 ## Run
 
