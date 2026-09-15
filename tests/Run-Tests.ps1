@@ -8,6 +8,6 @@ Get-ChildItem "$PSScriptRoot\.." -Recurse -Include *.ps1,*.psm1 | ForEach-Object
 }
 if ($errors.Count) { $errors | Format-List | Out-Host; exit 1 }
 Import-Module Pester -MinimumVersion 3.4
-$result=Invoke-Pester -Script "$PSScriptRoot\Core.Tests.ps1" -PassThru
+$result=Invoke-Pester -Script @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.Tests.ps1' | ForEach-Object { $_.FullName }) -PassThru
 if ($result.FailedCount) { exit 1 }
 exit 0

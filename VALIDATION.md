@@ -16,7 +16,27 @@
 - Added helper-content/startup-registration checks on resume and interpreter validation before installation. Physical keyboard and login acceptance checks below still need manual execution.
 - Expanded Pester suite: **30 passed, 0 failed**, including stale-helper replacement and missing startup registration.
 
-## Disposable VM matrix (all NOT RUN)
+## Wizard and desktop reconfiguration verification (2026-09-14)
+
+- PowerShell 5.1 parsing passed; **69 Pester tests passed, 0 failed**. Coverage includes the wizard, dependency changes, bulk selection, cancellation, scrolling frames, fallback input, state migration, desktop opt-outs and independent reconfiguration retries.
+- Exercised the real console wizard in a Windows pseudo-terminal: Space toggled a desktop setting, Right/Left moved between screens while retaining it, and Esc/Y cancelled. The cursor was restored and the process exited successfully. This used `tests/Preview-Wizard.ps1`; it did not save selections or change desktop settings.
+- Rendered narrow and normal-width frames, including the Linux screen. Regression tests check frame dimensions and individual review rows.
+- Native enable/restore operations remain mocked. Full Windows Terminal/classic-console manual resize checks and actual desktop restoration on a disposable VM remain **NOT RUN**.
+
+### Additional acceptance cases (NOT RUN)
+
+| Case | Required outcome |
+| --- | --- |
+| Wizard navigation | Space toggles once, Back/Next retains choices, required items explain their dependencies, build prerequisites expand/collapse. |
+| Review and cancellation | Every selected operation is visible by scrolling; Back edits it; Esc/Y or declining APPLY leaves disk and desktop unchanged. |
+| Resize and fallback | Test 50x16 and larger layouts in Windows Terminal and the classic console; resizing retains focus; fallback numbers work; redirected input cannot approve changes. |
+| Initial desktop opt-outs | Uncheck each new desktop toggle; its associated settings/startup/default-profile changes do not occur. |
+| Legacy-state migration | Complete a version-1 run, preview reconfiguration without changing the state file, then approve one setting; original versions, logs and backups survive. |
+| Desktop on/off cycles | Toggle all eight settings on, off, then on again. Off restores recorded originals; unrelated JSON/registry values and Terminal profiles survive. |
+| Win-tap reconfiguration | Disable only the managed helper. Other AutoHotkey scripts keep running. Re-enable with AutoHotkey initially absent; the disclosed dependency is installed. |
+| Failed restoration | Make a backup unavailable or cancel Widgets UAC. Report that setting as failed; preserve other successful changes and retry only unfinished actions on resume. |
+
+## Original disposable VM matrix (all NOT RUN)
 
 Use a fresh Windows 11 Home x64 VM and repeat on Pro x64. Enable nested virtualization. Take an OOBE-completed, signed-in snapshot; transfer this project to the normal user's local disk. Record OS/WSL/WinGet/PowerToys versions and preserve transcripts, state, screenshots and outputs for each case.
 

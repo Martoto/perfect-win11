@@ -61,7 +61,7 @@ function Get-InstallCatalog {
     $items = @(
         @{ id='Microsoft.PowerToys'; kind='windows'; required=$true; selected=$true },
         @{ id='Microsoft.WindowsTerminal'; kind='windows'; required=$true; selected=$true },
-        @{ id='AutoHotkey.AutoHotkey'; kind='windows'; required=$true; selected=$true },
+        @{ id='AutoHotkey.AutoHotkey'; kind='windows'; required=$false; selected=$false },
         @{ id='Microsoft.VisualStudioCode'; kind='windows'; required=$false; selected=$true },
         @{ id='Microsoft.PowerShell'; kind='windows'; required=$false; selected=$true }
     )
@@ -140,14 +140,18 @@ function Select-Checklist($Title, $Items) {
 }
 
 function New-SetupState($Manifest, $Install, $Remove, $Sid) {
-    @{ schemaVersion=1; ownerSid=$Sid; created=(Get-Date).ToUniversalTime().ToString('o'); manifest=$Manifest;
+    $state=@{ schemaVersion=2; ownerSid=$Sid; created=(Get-Date).ToUniversalTime().ToString('o'); manifest=$Manifest;
         install=@($Install); remove=@($Remove); versions=@{}; steps=@{}; backups=@(); removals=@();
-        distro='Ubuntu-24.04'; reuseApproved=$false; linuxUser=$null; linux=@{}; rebootBoot=$null }
+        distro='Ubuntu-24.04'; reuseApproved=$false; linuxUser=$null; linux=@{}; rebootBoot=$null;
+        settings=@{}; appliedSettings=@{}; setupComplete=$false; reconfiguration=$null; history=@() }
+    foreach ($item in Get-SettingsCatalog) { $state.settings[$item.id]=$true; $state.appliedSettings[$item.id]=$false }
+    foreach ($item in $Remove) { if ($item.kind -eq 'setting') { $state.settings[$item.id]=[bool]$item.selected } }
+    return $state
 }
 
 function Read-SetupState($Path, $Sid) {
     $state = Read-Json $Path
-    if ($state.schemaVersion -ne 1 -or $state.ownerSid -ne $Sid) { throw 'State version or initiating user does not match.' }
+    if ($state.schemaVersion -notin @(1,2) -or $state.ownerSid -ne $Sid) { throw 'State version or initiating user does not match.' }
     Assert-Manifest $state.manifest
     $selectedManifest = @{schemaVersion=1; windows=@($state.install | Where-Object kind -eq 'windows' | ForEach-Object { $_.id }); wsl=@($state.install | Where-Object kind -eq 'wsl' | ForEach-Object { $_.id })}
     Assert-Manifest $selectedManifest
@@ -159,21 +163,93 @@ function Read-SetupState($Path, $Sid) {
     foreach ($item in $state.remove) {
         if (-not @(Get-RemovalCatalog | Where-Object { $_.id -ceq $item.id -and $_.kind -ceq $item.kind }).Count) { throw 'Unknown removal in saved state.' }
     }
-    return $state
+    return (ConvertTo-SetupV2 $state)
+}
+
+function Get-SettingsCatalog {
+    @(
+        @{id='taskbar'; title='Auto-hide the taskbar'; group='Desktop'; description='Make more room for your work. Move the pointer to the screen edge to reveal the taskbar.'},
+        @{id='win-tap'; title='Tap Win to open Command Palette'; group='Desktop'; description='A short Win tap opens Command Palette; Win shortcuts stay native. Requires AutoHotkey and running PowerToys.'},
+        @{id='powertoys-startup'; title='Start PowerToys when I sign in'; group='Desktop'; description='Makes Command Palette available after login. Independent of the Win-tap toggle.'},
+        @{id='terminal-default'; title='Open Ubuntu by default in Terminal'; group='Desktop'; description='Changes the default profile only. Your other profiles remain available.'},
+        @{id='ads'; title='Disable ads and promotional installs'; group='Distractions'; description='Disable advertising personalization and suggested app installs for this user.'},
+        @{id='suggestions'; title='Disable tips and suggestions'; group='Distractions'; description='Reduce Windows tips, Start suggestions and Explorer promotional notifications.'},
+        @{id='widgets'; title='Disable Widgets'; group='Distractions'; description='Hide the taskbar entry and apply the machine Widgets policy (requests UAC).'},
+        @{id='search-web'; title='Disable web results in Search'; group='Distractions'; description='Apply the Windows Search web-suggestions preference. Sign out/in to see policy changes.'}
+    )
+}
+
+function Test-StepDone($State,$Name) {
+    return $State.steps.ContainsKey($Name) -and $State.steps[$Name].status -in @('done','satisfied')
+}
+
+function Test-SetupComplete($State) {
+    if ($State.rebootBoot) { return $false }
+    $expected=@('winget','windows-inventory','powertoys-settings','wsl-features','wsl-update','wsl-user','wsl-systemd','linux-install','linux-verify','terminal-profile')
+    foreach ($item in $State.install) { if ($item.kind -eq 'windows' -and $item.selected) { $expected += 'install:'+$item.id } }
+    foreach ($item in $State.remove) {
+        if ($item.selected -and ($State.schemaVersion -eq 1 -or $item.kind -ne 'setting')) { $expected += "remove:$($item.kind):$($item.id)" }
+    }
+    if (@($State.install | Where-Object { $_.id -eq 'Microsoft.VisualStudioCode' -and $_.selected }).Count) { $expected += 'vscode-wsl' }
+    if ($State.schemaVersion -eq 1) { $expected += @('taskbar','win-tap') }
+    else { foreach ($id in $State.settings.Keys) { if ($State.settings[$id] -and -not $State.appliedSettings[$id]) { return $false } } }
+    foreach ($name in $expected) { if (-not (Test-StepDone $State $name)) { return $false } }
+    return -not @($State.steps.Values | Where-Object { $_.status -in @('running','failed') }).Count
+}
+
+function ConvertTo-SetupV2($State) {
+    if ($State.schemaVersion -eq 1) {
+        $complete=Test-SetupComplete $State
+        $State.settings=@{}; $State.appliedSettings=@{}
+        $legacy=@{taskbar='taskbar'; 'win-tap'='win-tap'; 'powertoys-startup'='powertoys-settings'; 'terminal-default'='terminal-profile'}
+        foreach ($item in Get-SettingsCatalog) {
+            $id=$item.id; $desired=$true
+            if (-not $legacy.ContainsKey($id)) {
+                $choice=@($State.remove | Where-Object { $_.kind -eq 'setting' -and $_.id -eq $id })
+                $desired=$choice.Count -gt 0 -and $choice[0].selected
+                $legacy[$id]="remove:setting:$id"
+            }
+            $State.settings[$id]=[bool]$desired
+            $State.appliedSettings[$id]=[bool]($desired -and (Test-StepDone $State $legacy[$id]))
+            if ($State.appliedSettings[$id]) { $State.steps["desktop:$id"]=@{status='done'; error=$null; migrated=$true} }
+        }
+        $State.setupComplete=$complete; $State.reconfiguration=$null; $State.history=@(); $State.schemaVersion=2
+    }
+    foreach ($field in @('settings','appliedSettings')) {
+        if (-not $State.ContainsKey($field) -or $State[$field] -isnot [Collections.IDictionary]) { throw "Invalid saved $field." }
+        $ids=@(Get-SettingsCatalog | ForEach-Object { $_.id })
+        foreach ($id in $State[$field].Keys) { if ($id -notin $ids) { throw "Unknown saved setting: $id" } }
+        foreach ($id in $ids) { if (-not $State[$field].ContainsKey($id) -or $State[$field][$id] -isnot [bool]) { throw "Invalid saved setting: $id" } }
+    }
+    if (-not $State.ContainsKey('reconfiguration') -or -not $State.ContainsKey('history') -or -not $State.ContainsKey('setupComplete')) { throw 'Incomplete settings state.' }
+    if ($State.setupComplete -isnot [bool] -or $State.history -isnot [array]) { throw 'Invalid settings history or completion flag.' }
+    if ($State.reconfiguration) {
+        $seen=@{}
+        foreach ($action in $State.reconfiguration.actions) {
+            if ($action.setting -notin @(Get-SettingsCatalog | ForEach-Object { $_.id }) -or $action.enabled -isnot [bool]) { throw 'Invalid reconfiguration action.' }
+            if ($action.status -notin @('pending','running','failed','done') -or $seen.ContainsKey($action.setting)) { throw 'Invalid or duplicate reconfiguration action.' }
+            $seen[$action.setting]=$true
+        }
+        foreach ($item in Get-SettingsCatalog) {
+            if (-not $State.reconfiguration.targetSettings.ContainsKey($item.id) -or $State.reconfiguration.targetSettings[$item.id] -isnot [bool]) { throw 'Invalid reconfiguration target settings.' }
+        }
+    }
+    return $State
 }
 
 function Invoke-Step($State, $Path, [string]$Name, [scriptblock]$Action, [scriptblock]$Satisfied) {
-    if (-not $Satisfied -and $State.steps.ContainsKey($Name) -and $State.steps[$Name].status -in @('done','satisfied')) { return $true }
+    if (-not $Satisfied -and $State.steps.ContainsKey($Name) -and $State.steps[$Name].status -in @('done','satisfied')) { Write-Host "[SKIPPED] $Name"; return $true }
+    Write-Host "[RUNNING] $Name"
     $State.steps[$Name] = @{status='running'; at=(Get-Date).ToString('o'); error=$null}
     Write-Json $Path $State
     try {
         if ($Satisfied -and (& $Satisfied)) {
             $State.steps[$Name] = @{status='satisfied'; at=(Get-Date).ToString('o'); error=$null}
-            Write-Json $Path $State; return $true
+            Write-Json $Path $State; Write-Host "[SKIPPED] $Name (already satisfied)"; return $true
         }
         & $Action | Out-Host
         $State.steps[$Name] = @{status='done'; at=(Get-Date).ToString('o'); error=$null}
-        Write-Json $Path $State; return $true
+        Write-Json $Path $State; Write-Host "[DONE] $Name"; return $true
     } catch {
         $State.steps[$Name] = @{status='failed'; at=(Get-Date).ToString('o'); error=$_.Exception.Message}
         Write-Json $Path $State

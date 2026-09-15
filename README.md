@@ -20,11 +20,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1 -AppList .\a
 
 # Resume after a restart or a failed installation:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1 -Resume
+
+# Revisit desktop settings after setup completes:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1 -Reconfigure
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1 -Reconfigure -WhatIf
 ```
 
 ExecutionPolicy Bypass applies only to that process. The setup does not change the machine's execution policy. Keep this project in place until setup finishes.
 
-Toggle checklist items by entering comma-separated numbers; Enter accepts the list. PowerToys, Terminal and AutoHotkey v2 are required. Runtime or Starship selection enables mise; runtime build dependencies are included in the final summary even if unchecked earlier. Type `APPLY` only after reviewing that summary. Setup accepts the selected installers' license and source agreements. Installers may display UAC prompts.
+The wizard groups choices into **Desktop**, **Distractions**, **App removal**, **Windows apps**, **Linux tools**, and **Review**. Use **Up/Down** to move, **Space** to toggle, **Left/Right** for Back/Next, and **Enter** to activate a focused action. **Home/End** jump to the first/last row. **Esc** asks whether to cancel; cancellation does not save or apply changes. Details beneath the list explain the focused feature and its dependencies.
+
+Each selection screen offers **Select optional**, **Clear optional**, and **Recommended defaults**. Build libraries appear under an expandable **Build prerequisites** entry. Dependencies update immediately and explain why an item is required; turn off its parent feature before clearing it. PowerToys with Command Palette, Terminal, and Ubuntu/WSL2 remain foundations. AutoHotkey is included when Win-tap is selected, or when explicitly selected as an application.
+
+The full-screen interface requires an interactive console at least 50 columns by 16 rows. Smaller or unsupported hosts use a numbered interface with the same choices and explanations: enter one displayed number, `next`, `back`, or `cancel`. Blank input never accepts a screen. Redirected input can navigate the fallback interface, but it cannot approve system changes; use `-WhatIf` for unattended previews.
+
+Review all changes, go Back if needed, and continue to the explicit `APPLY` prompt. Setup accepts the selected installers' license and source agreements. Installers may display UAC prompts. Execution shows running, completed, skipped and failed steps with the retry command at the end.
 
 The setup never reboots Windows automatically. Exit code `3010` means restart manually and use the printed resume command; `1` means an error or unfinished step; `0` means selected automated steps completed (manual acceptance checks remain). Launching again without `-Resume` also reuses existing saved state. `-AppList` cannot replace an in-progress manifest. Previewing a remote manifest downloads that JSON only; previews do not resolve live versions or run preflight probes.
 
@@ -37,9 +47,19 @@ The setup never reboots Windows automatically. Exit code `3010` means restart ma
 - Git, GitHub CLI, Neovim, tmux, ripgrep, fd, fzf, bat, jq, btop, zoxide and build packages are preselected **inside Ubuntu**. Bash aliases expose Ubuntu's `fdfind` and `batcat` as `fd` and `bat` if those names are not already present.
 - mise manages Node LTS and stable Python, Go, Rust and Ruby through its core backends. Starship uses mise's Aqua backend. Versions are resolved and checkpointed before installation; an unavailable pinned release fails visibly instead of silently switching versions. Existing installed APT/WinGet packages are accepted without forced downgrades. Observed package versions are saved separately.
 - Docker Engine, Buildx and Compose use Docker's Ubuntu repository. Docker starts through systemd. Docker-group membership gives the chosen Linux user root-equivalent access. Conflicting existing Docker/container packages require manual migration; setup does not delete containers or volumes.
-- VS Code with the WSL extension and PowerShell 7 are preselected on Windows. Ubuntu receives a dedicated default Terminal profile without replacing existing profiles. Terminal JSONC comments/formatting are normalized; all other parsed values are retained and the original file is backed up. Close Terminal's Settings editor before applying to avoid concurrent edits.
-- Taskbar auto-hide uses `SHAppBarMessage` and preserves other appbar state flags. PowerToys settings receive targeted edits to `startup` and `enabled.CmdPal`; the runner restarts briefly. Other module settings and Command Palette's existing shortcut stay intact.
-- AutoHotkey v2 starts at login. A standalone left/right Win tap of at most 300 ms invokes Command Palette's existing show event. Physical Win-down is passed through immediately for native combinations. A held key alone is not a tap. The helper provides a tray exit action. PowerToys must be running in the same session. The show event is an upstream implementation detail checked during setup; future upstream changes may require updating the helper.
+- VS Code with the WSL extension and PowerShell 7 are preselected on Windows. Ubuntu receives a dedicated Terminal profile without replacing existing profiles; making it the default is optional. Terminal JSONC comments/formatting are normalized; other parsed values are retained and the original file is backed up. Close Terminal's Settings editor before applying to avoid concurrent edits.
+- Taskbar auto-hide and PowerToys startup are separate, initially enabled choices. Auto-hide uses `SHAppBarMessage` and preserves other appbar state flags. Command Palette enablement remains part of setup independently of startup. Other module settings and the existing activation shortcut stay intact.
+- The optional Win-tap helper starts at login. A standalone left/right Win tap of at most 300 ms invokes Command Palette's existing show event. Physical Win-down is passed through immediately for native combinations. A held key alone is not a tap. The helper provides a tray exit action. PowerToys must be running in the same session, even if its startup option is unchecked. The show event is an upstream implementation detail checked during setup; future upstream changes may require updating the helper.
+
+## Reconfigure desktop settings
+
+After a successful setup, `-Reconfigure` reopens the Desktop and Distractions screens. It controls taskbar auto-hide, Win-tap, PowerToys startup, Terminal's default profile, ads, suggestions, Widgets and Search web results. It does not change app-removal, Linux, runtime or other package selections. Enabling Win-tap may install its AutoHotkey dependency if missing; this is disclosed in review.
+
+Unchecking a previously applied setting **restores its recorded original values**. If the feature was already enabled before setup, restoring that original value may leave it enabled. On a fresh setup, an unchecked setting is simply left alone.
+
+Restoration touches only the relevant registry values, taskbar flag or JSON property. Changing Terminal's default preserves the dedicated Ubuntu profile and any other profiles or preferences added since setup. Turning off Win-tap stops only the managed helper, restores its startup entry, and leaves AutoHotkey installed. Missing backups cause a specific failure; the tool does not guess factory defaults.
+
+Reconfiguration requires the original setup to be complete. Finish pending or failed setup steps with `-Resume` first. Approved reconfiguration is saved as a separate batch; if a change fails, `-Resume` retries only its unfinished actions. Successful batches remain in history. Changes are not saved until the final approval, including migration from an older state file. `-Reconfigure` cannot be combined with `-Resume` or `-AppList`; `-Reconfigure -WhatIf` displays the current plan without writing or opening the wizard.
 
 ## Custom package data
 
@@ -57,13 +77,15 @@ Both arrays are required and may be empty. Maximum 200 IDs per array and 128 cha
 
 ## State, retry and recovery
 
-`%LOCALAPPDATA%\PerfectWin11` contains `state.json`, its previous atomic revision, transcripts, file backups, installed WinGet inventory and the login helper. The state records the initiating SID, original manifest, choices, pinned versions, step statuses, settings backups and removal history. A file lock prevents concurrent applying processes. `running` and `failed` steps are retried; completed non-package steps are skipped. WinGet packages are inventoried again. For a fresh set of choices, finish or deliberately abandon the old run and **archive** the whole state directory first.
+`%LOCALAPPDATA%\PerfectWin11` contains `state.json`, its previous atomic revision, transcripts, file backups, installed WinGet inventory and the login helper. State version 2 records requested/applied desktop settings and reconfiguration history in addition to the initiating SID, manifest, package choices, pinned versions, step results, backups and removals. Legacy version-1 files are migrated in memory using saved choices and completed steps; existing backups and versions are retained. Custom package manifests still use schema version 1.
+
+A file lock prevents concurrent applying processes, and approval checks for state changes since the review began. `running` and `failed` steps are retried; completed non-package steps are skipped. WinGet packages are inventoried again during ordinary setup resume. For a fresh set of package/removal choices, finish or deliberately abandon the old run and **archive** the whole state directory first. Use `-Reconfigure` for later desktop changes.
 
 Ubuntu also stores atomic per-package state and configuration backups in `/var/lib/perfect-win11`. This is authoritative for Linux retries and is mirrored into Windows state after each Linux phase, including failures. Do not remove it while resuming. Package dependencies may change in upstream repositories; the saved top-level versions are a reproducibility aid, not an offline repository snapshot. The mise installer is downloaded over HTTPS from its official endpoint, cached with its hash, and executed as the normal Linux user. No custom manifest content is evaluated as a shell command.
 
 Network failures, package errors, UAC cancellation and incompatible existing configuration are reported and leave a resume path. If firmware virtualization is unavailable, setup stops before applying. If Ubuntu's default account remains root, finish the distro's normal account initialization, set its normal default user, then resume. If an installer reports a pending restart, restart manually and resume.
 
-To restore **Windows settings**:
+For targeted restoration, prefer `-Reconfigure` and uncheck the desired settings. The older bulk **Windows settings** restoration command remains available:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Restore-Settings.ps1 -WhatIf
@@ -81,6 +103,10 @@ Settings restoration **does not reinstall removed apps, restore their provisioni
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-WinTap.ps1
+
+# Try the wizard without changing the machine or saving selections:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Preview-Wizard.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Preview-Wizard.ps1 -Reconfigure
 ```
 
 The suite runs with the inbox Pester 3.4 on Windows PowerShell 5.1 and mocks system operations. The separate AutoHotkey test requires the v2 interpreter (or `-AutoHotkeyPath`) and validates script loading without activating hotkeys. Setup also performs this check before copying/registering the helper. Resume refreshes the helper when its source hash changes. Neither test executes setup against the host. See [VALIDATION.md](VALIDATION.md) for the remaining acceptance procedure.

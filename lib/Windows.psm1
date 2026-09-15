@@ -186,7 +186,6 @@ function Set-Terminal($State,$Path) {
     $entry.commandline='wsl.exe -d "' + $State.distro + '"'
     $entry.startingDirectory='\\wsl.localhost\' + $State.distro + '\home\' + $State.linuxUser
     $entry.hidden=$false
-    $settings.defaultProfile=$guid
     Write-Json $target $settings
 }
 
@@ -209,9 +208,8 @@ function Set-PowerToys($State,$Path) {
     $settings=Read-Json $target
     if (-not $settings.ContainsKey('enabled') -or -not $settings.enabled.ContainsKey('CmdPal')) { throw 'Unrecognized PowerToys settings: enable Command Palette once in Settings and resume.' }
     Save-FileBackup $State $Path $target
-    $settings.startup=$true; $settings.enabled['CmdPal']=$true
+    $settings.enabled['CmdPal']=$true
     Write-Json $target $settings
-    Set-BackedRegistry $State $Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'PerfectWin11.PowerToys' ('"'+$exe+'"') 'String'
     Start-Process -FilePath $exe
     for ($i=0; $i -lt 40; $i++) {
         try {
