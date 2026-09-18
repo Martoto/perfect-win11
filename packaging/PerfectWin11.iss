@@ -30,6 +30,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64os
 ArchitecturesInstallIn64BitMode=x64os
 MinVersion=10.0.22000
+UninstallDisplayName=Perfect Win11
 UninstallDisplayIcon={app}\perfect-win11.exe
 OutputDir={#OutputDir}
 #ifdef ReleaseSigned
