@@ -6,6 +6,7 @@
 [![Last commit](https://img.shields.io/github/last-commit/Martoto/perfect-win11?style=flat-square&color=22c55e)](https://github.com/Martoto/perfect-win11/commits/main)
 [![Windows 11 x64](https://img.shields.io/badge/Windows-11%20x64-0078D4?style=flat-square)](#run-it)
 [![Windows PowerShell 5.1](https://img.shields.io/badge/Windows%20PowerShell-5.1-5391FE?style=flat-square)](#run-it)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 
 I Actually believe Win11 can be as good of a developer desktop experience as linux or Mac. So I built this opinionated configuration tool to get OOBE windows into a respectable shape.
 
@@ -14,6 +15,8 @@ Larpers beware!
 The idea is pretty simple: less junk on the desktop, a proper Linux dev environment underneath, and fewer reasons to reach for the mouse. Pick what you want in the terminal, review the changes, and let it handle the boring parts.
 
 ## Run it
+
+Working on a proper installer and WinGet package too. They're not released yet; [the release checklist](packaging/RELEASE.md) tracks signing and VM testing. For now, run from this repo as shown below.
 
 Start after Windows has finished its first-run setup and you've signed in. You'll need Windows 11 x64 Home or Pro, internet, administrator credentials, and virtualization enabled in your firmware. In a VM, that means nested virtualization too.
 
@@ -162,6 +165,8 @@ To remove Docker-group access, run `sudo gpasswd -d "$USER" docker`, then exit a
 Restoring settings won't bring back removed apps or their data, restore app provisioning, uninstall your dev tools, or disable WSL. Reinstall apps through the Store or their publisher. For a full rollback, use a VM snapshot or your usual backup.
 
 ## Hacking on it
+
+Want to build the installer? See [packaging and releases](packaging/RELEASE.md). Development builds are clearly marked unsigned; the release workflow requires trusted signing and leaves publication for after VM acceptance.
 
 Found something broken or have a change in mind? [Open an issue](https://github.com/Martoto/perfect-win11/issues) or send a PR. For bugs, include your Windows version, the command you ran, and the relevant log output. Check logs for personal information before posting them.
 

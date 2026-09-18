@@ -1,7 +1,13 @@
 #Requires -Version 5.1
 $ErrorActionPreference='Stop'
 $errors=@()
-Get-ChildItem "$PSScriptRoot\.." -Recurse -Include *.ps1,*.psm1 | ForEach-Object {
+# Parse source only: build artifacts can contain downloaded tools and linked fixtures.
+$repo=Split-Path $PSScriptRoot
+$sourceFiles=@(Get-ChildItem $repo -File -Filter '*.ps1')
+foreach ($folder in @('lib','tests','packaging')) {
+    $sourceFiles+=@(Get-ChildItem (Join-Path $repo $folder) -Recurse -File | Where-Object Extension -in @('.ps1','.psm1'))
+}
+$sourceFiles | ForEach-Object {
     $tokens=$null; $parseErrors=$null
     [void][Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$parseErrors)
     $errors += $parseErrors

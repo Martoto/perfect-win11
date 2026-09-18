@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.0",
+  "installerSha256": "",
+  "sourceCommit": "",
+  "testedBy": "",
+  "testedAt": "",
+  "evidence": "",
+  "results": {
+    "windows11Home": "pending",
+    "windows11Pro": "pending",
+    "originalSetupMatrix": "pending",
+    "wizardAndReconfiguration": "pending",
+    "runtimesDockerAndVSCode": "pending",
+    "keyboardAndLogin": "pending",
+    "silentInstallAndNoConfiguration": "pending",
+    "upgradeReinstallAndRecovery": "pending",
+    "uninstallAndPathPreservation": "pending",
+    "concurrentOperations": "pending",
+    "wingetLocalManifest": "pending",
+    "installedSignatures": "pending"
+  }
+}

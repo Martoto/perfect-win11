@@ -1,0 +1,37 @@
+name: Build and test
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Test PowerShell and launcher
+        run: |
+          if (-not (Get-Module -ListAvailable Pester | Where-Object Version -eq '3.4.0')) {
+            Save-Module Pester -RequiredVersion 3.4.0 -Path artifacts/modules -Repository PSGallery
+            $env:PSModulePath = "$pwd/artifacts/modules;$env:PSModulePath"
+          }
+          Import-Module Pester -RequiredVersion 3.4.0
+          & ./tests/Run-Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+      - name: Compile unsigned development installer
+        run: |
+          $compiler = & ./packaging/Get-BuildTools.ps1
+          & ./packaging/Build.ps1 -IsccPath $compiler
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unsigned-development-installer
+          path: artifacts/*-UNSIGNED-Setup.exe
+          if-no-files-found: error
+          retention-days: 14

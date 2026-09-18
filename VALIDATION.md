@@ -1,5 +1,13 @@
 # Validation record and VM acceptance checklist
 
+## Packaging work (2026-09-17)
+
+- Windows PowerShell 5.1 / Pester 3.4: **96 passed, 0 failed**. GitHub workflow validation with actionlint 1.7.12 passes; documentation links, Markdown fences, and diff whitespace checked.
+- The x64 .NET Framework launcher compiles using the Windows Framework compiler. Process tests exercise literal argument forwarding (spaces, quotes, Unicode, URL metacharacters, empty values and trailing backslashes), caller directory, restoration routing, missing files, and exit codes 0/1/3010.
+- Inno Setup 6.7.1 compiles an unsigned development installer. Product metadata identifies Perfect Win11 / Daniel Salles / 0.1.0. No installer has been executed against the development host.
+- Cross-process locking tests exercise contention, retained handles and abandoned ownership. Signing tests reject unsigned/wrong-signer/untimestamped files and version mismatches; successful trust paths use mocked certificate verification and real PE metadata/hashes.
+- **NOT RUN:** real eSigner signing, signed installer/uninstaller checks, installer runtime/PATH/upgrade/uninstall scenarios, interactive packaged console and Ctrl+C checks, VM acceptance, and WinGet installation/submission. Follow [packaging/RELEASE.md](packaging/RELEASE.md) and fill the acceptance record with actual results before publication.
+
 ## Local verification (2026-09-10)
 
 - Windows PowerShell 5.1.26100.9168: all PowerShell source files parsed successfully.

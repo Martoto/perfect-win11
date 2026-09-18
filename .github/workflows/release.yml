@@ -1,0 +1,81 @@
+name: Signed release candidate
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag, for example v0.1.0
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: signed-release
+  cancel-in-progress: false
+jobs:
+  candidate:
+    runs-on: windows-2025
+    environment: release-signing
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: powershell
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      SIGNING_CERT_SHA1: ${{ secrets.SIGNING_CERT_SHA1 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'Dispatch release from main.' }
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$' -or $env:RELEASE_TAG -cne "v$version") { throw 'Tag must match VERSION.' }
+          $tagCommit = git rev-parse "refs/tags/$env:RELEASE_TAG^{commit}"
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne (git rev-parse HEAD)) { throw 'Checkout must match the version tag.' }
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Release commit must be on main.' }
+          # Require actual environment reviewers; merely naming an environment is not protection.
+          $environment = gh api "repos/$env:GITHUB_REPOSITORY/environments/release-signing" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not @($environment.protection_rules | Where-Object type -eq 'required_reviewers').Count) { throw 'Configure required reviewers on release-signing first.' }
+          $existing = gh release list --json tagName --limit 100 | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect existing releases.' }
+          if (@($existing | Where-Object tagName -eq $env:RELEASE_TAG).Count) { throw 'Release already exists. Never overwrite candidate artifacts; use a new version.' }
+      - name: Run tests
+        run: |
+          if (-not (Get-Module -ListAvailable Pester | Where-Object Version -eq '3.4.0')) {
+            Save-Module Pester -RequiredVersion 3.4.0 -Path artifacts/modules -Repository PSGallery
+            $env:PSModulePath = "$pwd/artifacts/modules;$env:PSModulePath"
+          }
+          Import-Module Pester -RequiredVersion 3.4.0
+          & ./tests/Run-Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+      - name: Download pinned tools
+        run: '& ./packaging/Get-BuildTools.ps1 -IncludeSigningProvider'
+      - name: Provision eSigner on the disposable runner
+        env:
+          ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
+          ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
+          ESIGNER_TOTP_SECRET: ${{ secrets.ESIGNER_TOTP_SECRET }}
+        run: '& ./packaging/Initialize-Signing.ps1'
+      - name: Build and verify signed candidate
+        run: |
+          $pins = Get-Content packaging/tools.lock.json -Raw | ConvertFrom-Json
+          & ./packaging/Build.ps1 -ReleaseSigned -IsccPath "$pwd/artifacts/tools/inno-$($pins.inno.version)/tools/ISCC.exe"
+          $version = (Get-Content VERSION -Raw).Trim()
+          & ./packaging/New-WinGetManifest.ps1 -Installer "artifacts/PerfectWin11-$version-Setup.exe" -OutputDirectory artifacts/winget
+          Compress-Archive artifacts/winget/*.yaml artifacts/winget-manifests.zip
+      - name: Create draft for VM acceptance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $notes = "Signed candidate $version. VM acceptance is pending. See packaging/RELEASE.md before publishing. Installation adds the tool; launch perfect-win11 to configure the desktop."
+          $notes | Set-Content artifacts/release-notes.txt
+          gh release create $env:RELEASE_TAG "artifacts/PerfectWin11-$version-Setup.exe" artifacts/SHA256SUMS artifacts/release-metadata.json artifacts/winget-manifests.zip --verify-tag --draft --title "Perfect Win11 $version" --notes-file artifacts/release-notes.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }
