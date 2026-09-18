@@ -3,18 +3,20 @@
 param([string]$AppList, [switch]$Resume, [switch]$Reconfigure)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-Import-Module "$PSScriptRoot\lib\Core.psm1" -Force
-Import-Module "$PSScriptRoot\lib\Windows.psm1" -Force
-Import-Module "$PSScriptRoot\lib\Wsl.psm1" -Force
-Import-Module "$PSScriptRoot\lib\Wizard.psm1" -Force
-Import-Module "$PSScriptRoot\lib\Desktop.psm1" -Force
+Import-Module "$PSScriptRoot\lib\Operation.psm1" -Force
 
 $stateDir=Join-Path $env:LOCALAPPDATA 'PerfectWin11'
 $statePath=Join-Path $stateDir 'state.json'
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $resumeCommand='powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Resume'
-$lock=$null; $transcript=$false; $exitCode=0; $configuring=$false; $originalHash=$null
+$lock=$null; $operation=$null; $transcript=$false; $exitCode=0; $configuring=$false; $originalHash=$null
 try {
+    $operation=Enter-PerfectWin11Operation
+    Import-Module "$PSScriptRoot\lib\Core.psm1" -Force
+    Import-Module "$PSScriptRoot\lib\Windows.psm1" -Force
+    Import-Module "$PSScriptRoot\lib\Wsl.psm1" -Force
+    Import-Module "$PSScriptRoot\lib\Wizard.psm1" -Force
+    Import-Module "$PSScriptRoot\lib\Desktop.psm1" -Force
     if ($Resume -and $AppList) { throw '-Resume and -AppList cannot be combined: resume uses the saved manifest.' }
     if ($Reconfigure -and ($Resume -or $AppList)) { throw '-Reconfigure cannot be combined with -Resume or -AppList.' }
     if (-not $WhatIfPreference) {
@@ -172,5 +174,6 @@ try {
 } finally {
     if ($transcript) { Stop-Transcript | Out-Null }
     if ($lock) { $lock.Dispose() }
+    Exit-PerfectWin11Operation $operation
 }
 exit $exitCode

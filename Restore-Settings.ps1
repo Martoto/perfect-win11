@@ -2,8 +2,16 @@
 [CmdletBinding(SupportsShouldProcess=$true,ConfirmImpact='High')]
 param()
 $ErrorActionPreference='Stop'
+Import-Module "$PSScriptRoot\lib\Operation.psm1" -Force
+$operation=$null
+try {
+$operation=Enter-PerfectWin11Operation
 Import-Module "$PSScriptRoot\lib\Core.psm1" -Force
 Import-Module "$PSScriptRoot\lib\Windows.psm1" -Force
+if (-not $WhatIfPreference) {
+    $principal=New-Object Security.Principal.WindowsPrincipal ([Security.Principal.WindowsIdentity]::GetCurrent())
+    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run restoration from a normal, non-elevated PowerShell window as the intended desktop user.' }
+}
 $statePath=Join-Path $env:LOCALAPPDATA 'PerfectWin11\state.json'
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $state=Read-SetupState $statePath $sid
@@ -26,3 +34,4 @@ foreach ($backup in @($state.backups | Select-Object -Last 10000)) {
     }
 }
 Write-Host 'Sign out/in. Removed apps, provisioning and app data were NOT restored. Linux settings backups are listed in /var/lib/perfect-win11/state.json.'
+} finally { Exit-PerfectWin11Operation $operation }

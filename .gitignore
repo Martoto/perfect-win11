@@ -2,3 +2,4 @@
 TestResults.xml
 __pycache__/
 .test-output/
+artifacts/

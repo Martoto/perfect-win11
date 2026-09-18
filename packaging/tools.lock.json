@@ -1,0 +1,14 @@
+{
+  "inno": {
+    "version": "6.7.1",
+    "url": "https://api.nuget.org/v3-flatcontainer/tools.innosetup/6.7.1/tools.innosetup.6.7.1.nupkg",
+    "sha256": "00A5A07E8A4BD3A30364CB579D744677B37ADFC22E365099CB01B8BD1E651828"
+  },
+  "cka": {
+    "version": "1.0.8-build-20250228",
+    "url": "https://github.com/SSLcom/eSignerCKA/releases/download/v1.0.8/SSL.COM.eSigner.CKA_1.0.8_build_20250228.exe",
+    "sha256": "C750EC9BEFC423BED9C80CFB089D9E9F997898CF52F8499534093DD781BF9B53"
+  },
+  "windowsSdk": "10.0.26100.0",
+  "pester": "3.4.0"
+}
