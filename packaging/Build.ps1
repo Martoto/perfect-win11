@@ -1,7 +1,8 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param([switch]$LauncherOnly, [string]$IsccPath, [switch]$ReleaseSigned)
+param([switch]$LauncherOnly, [string]$IsccPath, [switch]$ReleaseSigned, [switch]$ReleaseUnsigned)
 $ErrorActionPreference='Stop'
+if ($ReleaseSigned -and $ReleaseUnsigned) { throw 'Choose either a signed or unsigned release.' }
 $repo=Split-Path $PSScriptRoot
 $version=(Get-Content -LiteralPath "$repo\VERSION" -Raw).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION must be three numeric components.' }
@@ -46,6 +47,7 @@ using System.Reflection;
     if (-not $IsccPath) { $IsccPath=Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe' }
     if (-not (Test-Path -LiteralPath $IsccPath)) { throw 'Supply -IsccPath pointing to the pinned Inno Setup compiler. See packaging/RELEASE.md.' }
     $options=@("/DAppVersion=$version","/DPayloadDir=$payload","/DOutputDir=$artifacts")
+    if ($ReleaseSigned -or $ReleaseUnsigned) { $options+='/DReleaseBuild' }
     if ($ReleaseSigned) {
         $files=@(Get-ChildItem $payload -Recurse -File | Where-Object Extension -in @('.exe','.ps1','.psm1'))
         foreach ($file in $files) { & "$PSScriptRoot\Sign.ps1" -Path $file.FullName }
@@ -54,13 +56,13 @@ using System.Reflection;
     }
     & $IsccPath @options "$PSScriptRoot\PerfectWin11.iss"
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
-    $fileName=if ($ReleaseSigned) { "PerfectWin11-$version-Setup.exe" } else { "PerfectWin11-$version-UNSIGNED-Setup.exe" }
+    $fileName=if ($ReleaseSigned -or $ReleaseUnsigned) { "PerfectWin11-$version-Setup.exe" } else { "PerfectWin11-$version-UNSIGNED-Setup.exe" }
     $installerInfo=[Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $artifacts $fileName))
     $binaryVersion='{0}.{1}.{2}.{3}' -f $installerInfo.FileMajorPart,$installerInfo.FileMinorPart,$installerInfo.FileBuildPart,$installerInfo.FilePrivatePart
     if ($binaryVersion -ne "$version.0" -or $installerInfo.ProductName.Trim() -ne 'Perfect Win11' -or $installerInfo.CompanyName.Trim() -ne 'Daniel Salles') {
         throw 'Compiled installer metadata does not match the release identity.'
     }
-    if ($ReleaseSigned) {
-        & "$PSScriptRoot\Verify-Release.ps1" -Installer "$artifacts\PerfectWin11-$version-Setup.exe" -Payload $payload
+    if ($ReleaseSigned -or $ReleaseUnsigned) {
+        & "$PSScriptRoot\Verify-Release.ps1" -Installer "$artifacts\PerfectWin11-$version-Setup.exe" -Payload $payload -Unsigned:$ReleaseUnsigned
     }
 } finally { $buildLock.Dispose() }

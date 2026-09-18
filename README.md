@@ -16,7 +16,7 @@ The idea is pretty simple: less junk on the desktop, a proper Linux dev environm
 
 ## Run it
 
-Working on a proper installer and WinGet package too. They're not released yet; [the release checklist](packaging/RELEASE.md) tracks signing and VM testing. For now, run from this repo as shown below.
+Working on a proper installer and WinGet package too. They're not released yet; [the release checklist](packaging/RELEASE.md) tracks what's left to test. For now, run from this repo as shown below.
 
 Start after Windows has finished its first-run setup and you've signed in. You'll need Windows 11 x64 Home or Pro, internet, administrator credentials, and virtualization enabled in your firmware. In a VM, that means nested virtualization too.
 
@@ -166,7 +166,7 @@ Restoring settings won't bring back removed apps or their data, restore app prov
 
 ## Hacking on it
 
-Want to build the installer? See [packaging and releases](packaging/RELEASE.md). Development builds are clearly marked unsigned; the release workflow requires trusted signing and leaves publication for after VM acceptance.
+Want to build the installer? See [packaging and releases](packaging/RELEASE.md). No paid signing account needed. Releases can be unsigned for now, with signing available later. We still test the installer in a VM before publishing it.
 
 Found something broken or have a change in mind? [Open an issue](https://github.com/Martoto/perfect-win11/issues) or send a PR. For bugs, include your Windows version, the command you ran, and the relevant log output. Check logs for personal information before posting them.
 

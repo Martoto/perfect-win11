@@ -1,4 +1,4 @@
-name: Signed release candidate
+name: Release candidate
 on:
   workflow_dispatch:
     inputs:
@@ -6,10 +6,15 @@ on:
         description: Existing version tag, for example v0.1.0
         required: true
         type: string
+      signed:
+        description: Sign with SSL.com (requires signing credentials)
+        required: true
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: signed-release
+  group: release-candidate
   cancel-in-progress: false
 jobs:
   candidate:
@@ -23,6 +28,7 @@ jobs:
         shell: powershell
     env:
       RELEASE_TAG: ${{ inputs.tag }}
+      SIGN_RELEASE: ${{ inputs.signed }}
       SIGNING_CERT_SHA1: ${{ secrets.SIGNING_CERT_SHA1 }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -57,26 +63,29 @@ jobs:
           & ./tests/Run-Tests.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
       - name: Download pinned tools
-        run: '& ./packaging/Get-BuildTools.ps1 -IncludeSigningProvider'
+        run: '& ./packaging/Get-BuildTools.ps1 -IncludeSigningProvider:($env:SIGN_RELEASE -eq ''true'')'
       - name: Provision eSigner on the disposable runner
+        if: ${{ inputs.signed }}
         env:
           ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
           ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
           ESIGNER_TOTP_SECRET: ${{ secrets.ESIGNER_TOTP_SECRET }}
         run: '& ./packaging/Initialize-Signing.ps1'
-      - name: Build and verify signed candidate
+      - name: Build and verify candidate
         run: |
           $pins = Get-Content packaging/tools.lock.json -Raw | ConvertFrom-Json
-          & ./packaging/Build.ps1 -ReleaseSigned -IsccPath "$pwd/artifacts/tools/inno-$($pins.inno.version)/tools/ISCC.exe"
+          $signed = $env:SIGN_RELEASE -eq 'true'
+          & ./packaging/Build.ps1 -ReleaseSigned:$signed -ReleaseUnsigned:(!$signed) -IsccPath "$pwd/artifacts/tools/inno-$($pins.inno.version)/tools/ISCC.exe"
           $version = (Get-Content VERSION -Raw).Trim()
-          & ./packaging/New-WinGetManifest.ps1 -Installer "artifacts/PerfectWin11-$version-Setup.exe" -OutputDirectory artifacts/winget
+          & ./packaging/New-WinGetManifest.ps1 -Installer "artifacts/PerfectWin11-$version-Setup.exe" -OutputDirectory artifacts/winget -Unsigned:(!$signed)
           Compress-Archive artifacts/winget/*.yaml artifacts/winget-manifests.zip
       - name: Create draft for VM acceptance
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
-          $notes = "Signed candidate $version. VM acceptance is pending. See packaging/RELEASE.md before publishing. Installation adds the tool; launch perfect-win11 to configure the desktop."
+          $signing = if ($env:SIGN_RELEASE -eq 'true') { 'Digitally signed.' } else { 'Unsigned: Windows may show Unknown publisher or SmartScreen warnings.' }
+          $notes = "Candidate $version. $signing VM acceptance is pending. See packaging/RELEASE.md before publishing. Installation adds the tool; launch perfect-win11 to configure the desktop."
           $notes | Set-Content artifacts/release-notes.txt
           gh release create $env:RELEASE_TAG "artifacts/PerfectWin11-$version-Setup.exe" artifacts/SHA256SUMS artifacts/release-metadata.json artifacts/winget-manifests.zip --verify-tag --draft --title "Perfect Win11 $version" --notes-file artifacts/release-notes.txt
           if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }

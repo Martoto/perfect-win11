@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param([string]$Installer, [string]$Payload, [string]$OutputDirectory)
+param([string]$Installer, [string]$Payload, [string]$OutputDirectory, [switch]$Unsigned)
 $ErrorActionPreference='Stop'
 $script:ReleaseRepository=Split-Path $PSScriptRoot
 
@@ -28,10 +28,20 @@ function Assert-ReleaseSignature {
     return $signature
 }
 
+function Assert-ReleaseFile {
+    param([Parameter(Mandatory=$true)][string]$Path, [switch]$Unsigned)
+    if ($Unsigned) {
+        if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Missing file: $Path" }
+        if ((Get-AuthenticodeSignature -LiteralPath $Path).Status -ne 'NotSigned') {
+            throw "Unsigned mode requires an unsigned file, not a signed or damaged signature: $Path"
+        }
+    } else { [void](Assert-ReleaseSignature -Path $Path) }
+}
+
 function Assert-ReleaseInstaller {
-    param([Parameter(Mandatory=$true)][string]$Installer)
+    param([Parameter(Mandatory=$true)][string]$Installer, [switch]$Unsigned)
     $version=Get-ReleaseVersion
-    [void](Assert-ReleaseSignature -Path $Installer)
+    Assert-ReleaseFile -Path $Installer -Unsigned:$Unsigned
     $info=[Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path -LiteralPath $Installer).Path)
     $fileVersion='{0}.{1}.{2}.{3}' -f $info.FileMajorPart,$info.FileMinorPart,$info.FileBuildPart,$info.FilePrivatePart
     if ($fileVersion -ne "$version.0") { throw "Installer file version '$fileVersion' does not match VERSION '$version'." }
@@ -41,7 +51,7 @@ function Assert-ReleaseInstaller {
 # Dot sourcing shares the same trust gates with signing and manifest generation.
 if ($MyInvocation.InvocationName -eq '.') { return }
 if (-not $Installer -or -not $Payload) { throw 'Both -Installer and -Payload are required.' }
-$version=Assert-ReleaseInstaller -Installer $Installer
+$version=Assert-ReleaseInstaller -Installer $Installer -Unsigned:$Unsigned
 if (-not (Test-Path -LiteralPath $Payload -PathType Container)) { throw 'Payload directory is missing.' }
 $payloadVersion=(Get-Content -LiteralPath (Join-Path $Payload 'VERSION') -Raw).Trim()
 if ($payloadVersion -ne $version) { throw 'Payload VERSION differs from the installer.' }
@@ -49,7 +59,7 @@ foreach ($required in @('perfect-win11.exe','Setup.ps1','Restore-Settings.ps1','
     if (-not (Test-Path -LiteralPath (Join-Path $Payload $required))) { throw "Required payload missing: $required" }
 }
 $files=@(Get-ChildItem -LiteralPath $Payload -Recurse -File | Where-Object Extension -in @('.exe','.dll','.ps1','.psm1'))
-foreach ($file in $files) { [void](Assert-ReleaseSignature -Path $file.FullName) }
+foreach ($file in $files) { Assert-ReleaseFile -Path $file.FullName -Unsigned:$Unsigned }
 $launcherVersion=[Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $Payload 'perfect-win11.exe')).FileVersion
 if ($launcherVersion -ne "$version.0") { throw 'Launcher version differs from VERSION.' }
 $commit=(& git -C $script:ReleaseRepository rev-parse HEAD | Out-String).Trim()
@@ -62,12 +72,13 @@ if (-not $OutputDirectory) { $OutputDirectory=Split-Path (Resolve-Path -LiteralP
 $hash=(Get-FileHash -LiteralPath $Installer -Algorithm SHA256).Hash
 $name=Split-Path $Installer -Leaf
 "$hash  $name" | Set-Content -LiteralPath (Join-Path $OutputDirectory 'SHA256SUMS') -Encoding ASCII
-$signature=Assert-ReleaseSignature -Path $Installer
+$signature=if (-not $Unsigned) { Assert-ReleaseSignature -Path $Installer } else { $null }
 [ordered]@{
     version=$version
     sourceCommit=$commit
     installer=$name
     sha256=$hash
+    signingMode=$(if ($Unsigned) { 'unsigned' } else { 'signed' })
     signerThumbprint=$signature.SignerCertificate.Thumbprint
     signerSubject=$signature.SignerCertificate.Subject
     timestampSignerThumbprint=$signature.TimeStamperCertificate.Thumbprint

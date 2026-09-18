@@ -29,6 +29,10 @@ jobs:
         run: |
           $compiler = & ./packaging/Get-BuildTools.ps1
           & ./packaging/Build.ps1 -IsccPath $compiler
+          # Exercise the credential-free release path without publishing anything.
+          & ./packaging/Build.ps1 -IsccPath $compiler -ReleaseUnsigned
+          $version = (Get-Content VERSION -Raw).Trim()
+          & ./packaging/New-WinGetManifest.ps1 -Installer "artifacts/PerfectWin11-$version-Setup.exe" -OutputDirectory artifacts/winget -Unsigned
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: unsigned-development-installer

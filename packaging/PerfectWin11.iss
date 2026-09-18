@@ -33,12 +33,15 @@ MinVersion=10.0.22000
 UninstallDisplayName=Perfect Win11
 UninstallDisplayIcon={app}\perfect-win11.exe
 OutputDir={#OutputDir}
-#ifdef ReleaseSigned
+#if Defined(ReleaseBuild) || Defined(ReleaseSigned)
 OutputBaseFilename=PerfectWin11-{#AppVersion}-Setup
+#else
+OutputBaseFilename=PerfectWin11-{#AppVersion}-UNSIGNED-Setup
+#endif
+#ifdef ReleaseSigned
 SignTool=esigner
 SignedUninstaller=yes
 #else
-OutputBaseFilename=PerfectWin11-{#AppVersion}-UNSIGNED-Setup
 SignedUninstaller=no
 #endif
 Compression=lzma2

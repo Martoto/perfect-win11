@@ -1,9 +1,9 @@
 #Requires -Version 5.1
 [CmdletBinding(SupportsShouldProcess=$true)]
-param([string]$AcceptanceRecord)
+param([string]$AcceptanceRecord, [switch]$Unsigned)
 $ErrorActionPreference='Stop'
 
-function Assert-ReleaseAcceptance($Record,[string]$Version,[string]$Hash,[string]$Commit) {
+function Assert-ReleaseAcceptance($Record,[string]$Version,[string]$Hash,[string]$Commit,[switch]$Unsigned) {
     if ($Record.schemaVersion -ne 1 -or $Record.version -cne $Version -or
         $Record.installerSha256 -ine $Hash -or $Record.sourceCommit -ine $Commit) {
         throw 'Acceptance record must match the exact candidate version, installer SHA256 and source commit.'
@@ -15,13 +15,14 @@ function Assert-ReleaseAcceptance($Record,[string]$Version,[string]$Hash,[string
         'runtimesDockerAndVSCode','keyboardAndLogin','silentInstallAndNoConfiguration',
         'upgradeReinstallAndRecovery','uninstallAndPathPreservation','concurrentOperations',
         'wingetLocalManifest','installedSignatures')) {
-        if ($Record.results.$name -cne 'passed') { throw "Acceptance check is not passed: $name" }
+        $expected=if ($Unsigned -and $name -eq 'installedSignatures') { 'not-applicable' } else { 'passed' }
+        if ($Record.results.$name -cne $expected) { throw "Acceptance check must be ${expected}: $name" }
     }
 }
 if ($MyInvocation.InvocationName -eq '.') { return }
 if (-not $AcceptanceRecord) { throw '-AcceptanceRecord is required. Start with acceptance.example.json and record actual VM results.' }
 $record=Get-Content -LiteralPath $AcceptanceRecord -Raw | ConvertFrom-Json
-. "$PSScriptRoot\Verify-Release.ps1"
+. "$PSScriptRoot\Verify-Release.ps1" -Unsigned:$Unsigned
 $version=Get-ReleaseVersion
 $tag="v$version"
 $repository='Martoto/perfect-win11'
@@ -34,12 +35,15 @@ $directory=Join-Path (Split-Path $PSScriptRoot) ('artifacts\publication-'+[guid]
 & gh release download $tag --repo $repository --dir $directory --pattern "PerfectWin11-$version-Setup.exe" --pattern release-metadata.json
 if ($LASTEXITCODE -ne 0) { throw 'Could not download the exact draft assets.' }
 $installer=Join-Path $directory "PerfectWin11-$version-Setup.exe"
-[void](Assert-ReleaseInstaller $installer)
+[void](Assert-ReleaseInstaller $installer -Unsigned:$Unsigned)
 $metadata=Get-Content (Join-Path $directory 'release-metadata.json') -Raw | ConvertFrom-Json
 $hash=(Get-FileHash $installer -Algorithm SHA256).Hash
+$mode=if ($Unsigned) { 'unsigned' } else { 'signed' }
 if ($metadata.version -cne $version -or $metadata.sha256 -ine $hash -or $metadata.sourceCommit -ine $commit -or
-    $metadata.signerThumbprint -ine (Get-ReleaseSignerThumbprint)) { throw 'Candidate metadata does not match the downloaded signed installer and tag.' }
-Assert-ReleaseAcceptance $record $version $hash $commit
+    $metadata.signingMode -cne $mode) { throw 'Candidate metadata does not match the downloaded installer, signing mode and tag.' }
+if (-not $Unsigned -and $metadata.signerThumbprint -ine (Get-ReleaseSignerThumbprint)) { throw 'Candidate signer does not match.' }
+if ($Unsigned -and ($metadata.signerThumbprint -or $metadata.signerSubject -or $metadata.timestampSignerThumbprint)) { throw 'Unsigned metadata must not claim a signer.' }
+Assert-ReleaseAcceptance $record $version $hash $commit -Unsigned:$Unsigned
 if ($PSCmdlet.ShouldProcess("$repository/$tag ($hash)",'Publish the accepted draft without rebuilding')) {
     $evidenceFile=Join-Path $directory 'acceptance.json'
     Copy-Item -LiteralPath $AcceptanceRecord -Destination $evidenceFile

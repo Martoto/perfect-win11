@@ -1,5 +1,11 @@
 # Validation record and VM acceptance checklist
 
+## Optional signing (2026-09-18)
+
+- Windows PowerShell 5.1 / Pester 3.4: **100 passed, 0 failed**. Both workflow files pass actionlint. Inno Setup compiles the development installer.
+- Unsigned verification and manifest generation run without signing credentials. Publication tests cover signed and unsigned candidates, preview behavior, mismatched signing metadata, and the signature-only acceptance exception. GitHub operations and certificate statuses are mocked in these tests; PE metadata and hashes are real.
+- Releases default to unsigned; SSL.com enrollment is optional. VM acceptance, installer lifecycle checks and WinGet submission remain **NOT RUN**. Earlier signing requirements below describe the original packaging implementation.
+
 ## Packaging work (2026-09-17)
 
 - Windows PowerShell 5.1 / Pester 3.4: **96 passed, 0 failed**. GitHub workflow validation with actionlint 1.7.12 passes; documentation links, Markdown fences, and diff whitespace checked.

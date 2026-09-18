@@ -27,6 +27,15 @@ Describe 'Release trust gates' {
             $env:SIGNING_CERT_SHA1='any publisher'
             { Assert-ReleaseSignature "$TestDrive\sample.ps1" } | Should Throw
         }
+        It 'accepts explicitly unsigned files without signing credentials' {
+            $env:SIGNING_CERT_SHA1=''
+            Mock Get-AuthenticodeSignature { [pscustomobject]@{Status='NotSigned'} }
+            { Assert-ReleaseFile -Path "$TestDrive\sample.ps1" -Unsigned } | Should Not Throw
+        }
+        It 'does not treat broken signatures as unsigned' {
+            Mock Get-AuthenticodeSignature { [pscustomobject]@{Status='HashMismatch'} }
+            { Assert-ReleaseFile -Path "$TestDrive\sample.ps1" -Unsigned } | Should Throw
+        }
         It 'accepts a valid timestamped signature from the configured publisher' {
             Mock Get-AuthenticodeSignature { [pscustomobject]@{ Status='Valid'; SignerCertificate=[pscustomobject]@{Thumbprint=$env:SIGNING_CERT_SHA1;Subject='CN=Test'}; TimeStamperCertificate=[pscustomobject]@{Thumbprint='3333333333333333333333333333333333333333'} } }
             (Assert-ReleaseSignature "$TestDrive\sample.ps1").SignerCertificate.Thumbprint | Should Be $env:SIGNING_CERT_SHA1
@@ -147,6 +156,16 @@ Describe 'Release inventory and metadata' {
             $metadata.verifiedPayloadFiles | Should Be 4
             $metadata.sha256 | Should Be (Get-FileHash "$TestDrive\installer.exe" -Algorithm SHA256).Hash
             (Get-Content "$TestDrive\verified\SHA256SUMS") | Should Match '  installer.exe$'
+        }
+        It 'verifies and generates manifests for an explicitly unsigned candidate without credentials' {
+            $env:SIGNING_CERT_SHA1=''
+            Mock Get-AuthenticodeSignature { [pscustomobject]@{Status='NotSigned'} }
+            & $verify -Installer "$TestDrive\installer.exe" -Payload "$TestDrive\payload" -OutputDirectory "$TestDrive\unsigned-release" -Unsigned
+            $metadata=Get-Content "$TestDrive\unsigned-release\release-metadata.json" -Raw | ConvertFrom-Json
+            $metadata.signingMode | Should Be 'unsigned'
+            $metadata.signerThumbprint | Should BeNullOrEmpty
+            & $manifest -Installer "$TestDrive\installer.exe" -OutputDirectory "$TestDrive\unsigned-manifests" -Unsigned
+            (Get-Content "$TestDrive\unsigned-manifests\Martoto.PerfectWin11.installer.yaml" -Raw) | Should Match $metadata.sha256
         }
         It 'rejects an unsigned nested payload module before emitting metadata' {
             Mock Get-AuthenticodeSignature { [pscustomobject]@{Status='NotSigned';SignerCertificate=$null;TimeStamperCertificate=$null} } -ParameterFilter { $LiteralPath -like '*.psm1' }

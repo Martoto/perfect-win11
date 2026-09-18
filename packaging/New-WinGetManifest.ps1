@@ -2,11 +2,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$Installer,
-    [Parameter(Mandatory=$true)][string]$OutputDirectory
+    [Parameter(Mandatory=$true)][string]$OutputDirectory,
+    [switch]$Unsigned
 )
 $ErrorActionPreference='Stop'
-. "$PSScriptRoot\Verify-Release.ps1" -Installer $Installer -OutputDirectory $OutputDirectory
-$version=Assert-ReleaseInstaller -Installer $Installer
+. "$PSScriptRoot\Verify-Release.ps1" -Installer $Installer -OutputDirectory $OutputDirectory -Unsigned:$Unsigned
+$version=Assert-ReleaseInstaller -Installer $Installer -Unsigned:$Unsigned
 $hash=(Get-FileHash -LiteralPath $Installer -Algorithm SHA256).Hash
 $url="https://github.com/Martoto/perfect-win11/releases/download/v$version/PerfectWin11-$version-Setup.exe"
 [void][IO.Directory]::CreateDirectory($OutputDirectory)
@@ -63,4 +64,4 @@ ReleaseNotesUrl: https://github.com/Martoto/perfect-win11/releases/tag/v$version
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
 "@ | Set-Content -LiteralPath (Join-Path $OutputDirectory 'Martoto.PerfectWin11.locale.en-US.yaml') -Encoding UTF8
-Write-Output "Generated WinGet manifests for signed release $version in $OutputDirectory."
+Write-Output "Generated WinGet manifests for release $version in $OutputDirectory."

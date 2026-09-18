@@ -2,7 +2,7 @@
 
 `PerfectWin11.iss` targets the pinned Inno Setup 6 compiler used by the package build. Supply `/DAppVersion=0.1.0`, `/DPayloadDir=<absolute payload directory>`, and `/DOutputDir=<absolute output directory>`. The payload must contain `perfect-win11.exe` at its root. This script only packages files, shortcuts, uninstall registration, and a user PATH entry; it never runs the setup wizard or a system configuration command.
 
-Unsigned development builds are named `PerfectWin11-<version>-UNSIGNED-Setup.exe`. Release builds require `/DReleaseSigned` and an externally configured named Inno sign tool, `/Sesigner=<signing command>`. Both setup and the generated uninstaller are signed in release mode. The build pipeline must validate the resulting signatures; defining the release symbol alone is not signature verification.
+Development builds are named `PerfectWin11-<version>-UNSIGNED-Setup.exe`. Release builds use `/DReleaseBuild` and the stable `PerfectWin11-<version>-Setup.exe` filename. Signing is optional: `/DReleaseSigned` additionally requires a named Inno sign tool, `/Sesigner=<signing command>`, and signs setup and the generated uninstaller. The build pipeline validates signatures in signed mode and records unsigned mode explicitly otherwise. Use `Build.ps1 -ReleaseUnsigned` or `-ReleaseSigned` to select the release mode.
 
 ## Identity and location
 
@@ -45,6 +45,6 @@ Validate in a disposable Windows 11 x64 user profile:
 4. Hold the shared mutex in a command; both setup and uninstall must fail without terminating it. Release ownership while retaining a handle; retry must succeed. Repeat with an abandoned mutex.
 5. Reject elevated execution, ARM64, Windows 10, Windows Server, alternate `/DIR`, and application-closing overrides.
 6. Create representative external backups, logs, and login helper files; verify they survive uninstall.
-7. Verify release setup and uninstaller Authenticode signatures against the expected publisher.
+7. For signed releases, verify setup and uninstaller Authenticode signatures against the expected publisher. For unsigned releases, confirm that the release notes identify them as unsigned.
 
 Relevant compiler references: [architecture restrictions](https://jrsoftware.org/ishelp/topic_setup_architecturesallowed.htm), [administrative privilege detection](https://jrsoftware.org/ishelp/topic_isxfunc_isadmin.htm), [Windows version fields](https://jrsoftware.org/ishelp/topic_isxfunc_getwindowsversionex.htm), and [application-closing behavior](https://jrsoftware.org/ishelp/topic_setup_closeapplications.htm).
